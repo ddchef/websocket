@@ -1,7 +1,6 @@
 const Ws = require('ws')
 const cookie = require('cookie')
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('db.db');
+const store = require('./store')() 
 module.exports = function({server, onConnection, onMessage, onClose, onError},storage,session){
   if(!server){
     return false
@@ -21,23 +20,22 @@ module.exports = function({server, onConnection, onMessage, onClose, onError},st
   onError = onError || function (err) {
     console.log('[WebSocket] error: ' + err);
   }
-  wss.on('connection',(ws,req)=>{
-    var sql = 'SELECT * FROM __session_store WHERE id=$id'
+  wss.on('connection',async(ws,req)=>{
+    var sql = 'SELECT * FROM __session_store'
     let selfCookie = cookie.parse(req.headers.cookie)
-    db.get(sql,{$id:selfCookie.sessionID},(err,data)=>{
-      console.log(data)
-    })
-    console.log(selfCookie.sessionID)
-    ws.on('message', msg=>{
-      console.log(msg)
-      wss.clients.forEach(function each(client) {
-        if (client !== ws && client.readyState === Ws.OPEN) {
-          client.send(msg);
-        }
-      });
-    })
+    let info = await store.get('koa:sess:'+selfCookie.sessionID)
+    wsOnline(ws,wss,info)
     ws.on('close', onClose)
     ws.on('error', onError)
   })
   return wss
+}
+function wsOnline(ws,wss,user){
+  ws.on('message', msg=>{
+    wss.clients.forEach(function each(client) {
+      if (client !== ws && client.readyState === Ws.OPEN) {
+        client.send(user.user+':'+msg);
+      }
+    });
+  })
 }

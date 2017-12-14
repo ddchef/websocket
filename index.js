@@ -5,7 +5,6 @@ const session = require('koa-generic-session')
 const static = require('koa-static')
 const render = require('koa-swig')
 const Router = require('koa-router')
-const SQLiteStore = require('koa-sqlite3-session')
 const wss = require('./server/ws')
 const WebSocket = require('ws')
 let app = new Koa()
@@ -28,7 +27,7 @@ function storageInfo ({user,email}){
 app.use(koaBody())
 app.use(session({
   key:"sessionID",
-  store: new SQLiteStore('sqlite.db'),
+  store: require('./server/store')(),
   cookie:{
     maxAge: 1000*60*2,   
     expires: '',  
@@ -42,15 +41,14 @@ app.use(session({
   }
 }))
 app.use(static(path.join(__dirname,'./web')))
-router.get('/session',async (ctx,next)=>{
+router.get('/api/session',async (ctx,next)=>{
   if(ctx.session.user){
     ctx.body = {code:401,msg:`已登录`}
-    console.log(ctx.session)
     return;
   }
   ctx.body = {code:300,msg:'未登录'}
 })
-router.post('/login',async (ctx,next)=>{
+router.post('/api/login',async (ctx,next)=>{
   if(ctx.session.user){
     ctx.body = {code:401,msg:`${user},请勿重复登录！`}
     return;
@@ -66,7 +64,7 @@ router.post('/login',async (ctx,next)=>{
   }
   if(!userInfo){
     storageInfo({user,email})
-    ctx.session={user:user,email:user}
+    ctx.session={user:user,email:email}
   }
   ctx.response.body={code:200,msg:'success'}
 })
