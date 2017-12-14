@@ -2,75 +2,45 @@ const Koa = require('koa')
 const path = require('path')
 const koaBody = require('koa-bodyparser')
 const session = require('koa-generic-session')
-const static = require('koa-static')
-const render = require('koa-swig')
+const koaStatic = require('koa-static')
 const Router = require('koa-router')
 const wss = require('./server/ws')
-const WebSocket = require('ws')
 let app = new Koa()
 let router = new Router()
-let storage = [];
-function filter(email){
-  let user = storage.map(item=>{
-    if(item.email == email){
-      return item
-    }
-  })
-  if(user.length>0){
-    return user[0]
-  }
-  return false
-}
-function storageInfo ({user,email}){
-  storage.push({user,email})
-}
 app.use(koaBody())
 app.use(session({
-  key:"sessionID",
+  key: 'sessionID',
   store: require('./server/store')(),
-  cookie:{
-    maxAge: 1000*60*2,   
-    expires: '',  
-    path: '',     
-    domain: '',   
-    httpOnly: '', 
-    overwrite: false,
-    secure: '',
-    sameSite: '',
-    signed: '',
+  cookie: {
+    maxAge: 1000 * 60 * 2,
+    overwrite: false
   }
 }))
-app.use(static(path.join(__dirname,'./web')))
-router.get('/api/session',async (ctx,next)=>{
-  if(ctx.session.user){
-    ctx.body = {code:401,msg:`已登录`}
-    return;
+app.use(koaStatic(path.join(__dirname, './web')))
+router.get('/api/session', async (ctx, next) => {
+  console.log(ctx.session.email)
+  if (ctx.session.email) {
+    ctx.body = {code: 401, msg: `已登录`}
+    return
   }
-  ctx.body = {code:300,msg:'未登录'}
+  ctx.body = {code: 300, msg: '未登录'}
 })
-router.post('/api/login',async (ctx,next)=>{
-  if(ctx.session.user){
-    ctx.body = {code:401,msg:`${user},请勿重复登录！`}
-    return;
+router.post('/api/login', async (ctx, next) => {
+  if (ctx.session.email) {
+    ctx.body = {code: 401, msg: `${ctx.session.email},请勿重复登录！`}
+    return
   }
-  let {user,email} = ctx.request.body
-  if(!user||!email){
-    ctx.body = {code:400,msg:`请输入正确的用户名和邮箱`}
-    return;
+  let {email} = ctx.request.body
+  if (!email) {
+    ctx.body = {code: 400, msg: `请输入正确的邮箱`}
+    return
   }
-  let userInfo = filter(email)
-  if(userInfo){
-    ctx.session={user:userInfo.user,email:userInfo.email}
-  }
-  if(!userInfo){
-    storageInfo({user,email})
-    ctx.session={user:user,email:email}
-  }
-  ctx.response.body={code:200,msg:'success'}
+  ctx.session = {email: email}
+  ctx.response.body = {code: 200, msg: '登录成功'}
 })
 app.use(router.routes())
 .use(router.allowedMethods)
-let server = app.listen(8001,()=>{
+let server = app.listen(8001, () => {
   console.log('starting 8001')
 })
-app.wss = wss({server},storage,session)
+app.wss = wss({server})
