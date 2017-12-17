@@ -1,42 +1,48 @@
 const Koa = require('koa')
 const path = require('path')
 const koaBody = require('koa-bodyparser')
-const session = require('koa-generic-session')
+const session = require('koa-session')
 const koaStatic = require('koa-static')
 const Router = require('koa-router')
+const store = require('./server/store')()
 const wss = require('./server/ws')
 let app = new Koa()
 let router = new Router()
+app.keys = ['what']
 app.use(koaBody())
 app.use(session({
   key: 'sessionID',
-  store: require('./server/store')(),
+  store: store,
   cookie: {
-    maxAge: 1000 * 60 * 2,
-    overwrite: false
+    path: '/',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000,
+    overwrite: true,
+    signed: true
   }
-}))
+}, app))
 app.use(koaStatic(path.join(__dirname, './web')))
 router.get('/api/session', async (ctx, next) => {
-  console.log(ctx.session.email)
-  if (ctx.session.email) {
+  let key = ctx.cookies.get('sessionID')
+  let UserSession = await store.get(key)
+  if (UserSession && UserSession.email) {
     ctx.body = {code: 401, msg: `已登录`}
     return
   }
   ctx.body = {code: 300, msg: '未登录'}
 })
 router.post('/api/login', async (ctx, next) => {
-  if (ctx.session.email) {
-    ctx.body = {code: 401, msg: `${ctx.session.email},请勿重复登录！`}
-    return
+  if (ctx.session.isNew) {
+    let {email} = ctx.request.body
+    ctx.session.email = email
+    ctx.body = {code: 200, msg: '登录成功'}
+    return true
   }
-  let {email} = ctx.request.body
-  if (!email) {
-    ctx.body = {code: 400, msg: `请输入正确的邮箱`}
-    return
-  }
-  ctx.session = {email: email}
-  ctx.response.body = {code: 200, msg: '登录成功'}
+  ctx.body = {code: 301, msg: '请勿重复登录'}
+})
+router.get('/api/logout', async (ctx, next) => {
+  ctx.session = null
+  ctx.body = {code: 200, msg: '注销成功'}
 })
 app.use(router.routes())
 .use(router.allowedMethods)

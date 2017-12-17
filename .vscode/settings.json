@@ -1,6 +1,5 @@
 {
     "eslint.options": {
-        "configFile":"/home/wxj/Documents/self/websocket/.eslintrc.js",
         "plugins": ["html"]
     },
     "eslint.validate": [
